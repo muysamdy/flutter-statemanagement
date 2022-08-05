@@ -25,8 +25,9 @@ class MyApp extends StatelessWidget {
           ),
         ),
         BlocProvider<FilterTodoBloc>(
-            create: (context) =>
-                FilterTodoBloc(initialTodos: context.read<TodoListBloc>().state.todos))
+          create: (context) =>
+              FilterTodoBloc(initialTodos: context.read<TodoListBloc>().state.todos),
+        )
       ],
       child: MaterialApp(
         title: 'Flutter Demo',

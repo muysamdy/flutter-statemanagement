@@ -6,6 +6,31 @@ import 'package:todo_cubit/model/todo_model.dart';
 class ShowTodo extends StatelessWidget {
   const ShowTodo({Key? key}) : super(key: key);
 
+  List<Todo> setFilteredTodos(Filter filter, List<Todo> todos, String searchTerm) {
+    List<Todo> _filteredTodos;
+
+    switch (filter) {
+      case Filter.active:
+        _filteredTodos = todos.where((Todo todo) => !todo.completed).toList();
+        break;
+
+      case Filter.completed:
+        _filteredTodos = todos.where((Todo todo) => todo.completed).toList();
+        break;
+
+      case Filter.all:
+      default:
+        _filteredTodos = todos;
+        break;
+    }
+    if (searchTerm.isNotEmpty) {
+      _filteredTodos = _filteredTodos
+          .where((Todo todo) => todo.desc.toLowerCase().contains(searchTerm))
+          .toList();
+    }
+    return _filteredTodos;
+  }
+
   @override
   Widget build(BuildContext context) {
     final todos = context.watch<FilterTodoBloc>().state.filteredTodos;
@@ -13,38 +38,48 @@ class ShowTodo extends StatelessWidget {
     return MultiBlocListener(
       listeners: [
         BlocListener<TodoListBloc, TodoListState>(listener: (context, state) {
-          context.read<FilterTodoBloc>().setFilteredTodos(
+          final filteredTodos = setFilteredTodos(
               context.read<TodoFilterBloc>().state.filter,
               state.todos,
               context.read<TodoSearchBloc>().state.searchTerm);
+          context
+              .read<FilterTodoBloc>()
+              .add(CalculateFilteredTodoEvent(filteredTodos: filteredTodos));
         }),
         BlocListener<TodoFilterBloc, TodoFilterState>(listener: (context, state) {
-          context.read<FilterTodoBloc>().setFilteredTodos(
+          final filteredTodo = setFilteredTodos(
               state.filter,
               context.read<TodoListBloc>().state.todos,
               context.read<TodoSearchBloc>().state.searchTerm);
+
+          context
+              .read<FilterTodoBloc>()
+              .add(CalculateFilteredTodoEvent(filteredTodos: filteredTodo));
         }),
         BlocListener<TodoSearchBloc, TodoSearchState>(listener: (context, state) {
-          context.read<FilterTodoBloc>().setFilteredTodos(
+          final filteredTodo = setFilteredTodos(
               context.read<TodoFilterBloc>().state.filter,
               context.read<TodoListBloc>().state.todos,
               state.searchTerm);
+
+          context
+              .read<FilterTodoBloc>()
+              .add(CalculateFilteredTodoEvent(filteredTodos: filteredTodo));
         }),
       ],
       child: ListView.separated(
         primary: false,
         shrinkWrap: true,
         itemCount: todos.length,
-        separatorBuilder: (BuildContext context, int index) {
-          return const Divider(color: Colors.grey);
-        },
+        separatorBuilder: (BuildContext context, int index) =>
+            const Divider(color: Colors.grey),
         itemBuilder: (BuildContext context, int index) {
           return Dismissible(
               key: ValueKey(todos[index].id),
               background: showBackground(0),
               secondaryBackground: showBackground(1),
               onDismissed: (_) {
-                context.read<TodoListBloc>().removeTodo(todos[index]);
+                context.read<TodoListBloc>().add(RemoveTodoEvent(todo: todos[index]));
               },
               confirmDismiss: (_) {
                 return showDialog(
@@ -52,16 +87,16 @@ class ShowTodo extends StatelessWidget {
                     barrierDismissible: false,
                     builder: (context) {
                       return AlertDialog(
-                        title: Text("Are you sure?"),
-                        content: Text("Do you really want to delete?"),
+                        title: const Text("Are you sure?"),
+                        content: const Text("Do you really want to delete?"),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context, false),
-                            child: Text("NO"),
+                            child: const Text("NO"),
                           ),
                           TextButton(
                             onPressed: () => Navigator.pop(context, true),
-                            child: Text("YES"),
+                            child: const Text("YES"),
                           )
                         ],
                       );
@@ -97,18 +132,16 @@ class TodoItem extends StatefulWidget {
 }
 
 class _TodoItemState extends State<TodoItem> {
-  late final textController = TextEditingController();
+  late final textController;
 
   @override
   void initState() {
-    // TODO: implement initState
-    // textController = TextEditingController();
+    textController = TextEditingController();
     super.initState();
   }
 
   @override
   void dispose() {
-    // TODO: implement dispose
     textController.dispose();
     super.dispose();
   }
@@ -142,9 +175,10 @@ class _TodoItemState extends State<TodoItem> {
                           setState(() {
                             _error = textController.text.isEmpty ? true : false;
                             if (!_error) {
-                              context
-                                  .read<TodoListBloc>()
-                                  .editTodo(widget.todo.id, textController.text);
+                              context.read<TodoListBloc>().add(EditTodoEvent(
+                                    id: widget.todo.id,
+                                    todoDesc: textController.text,
+                                  ));
                               Navigator.pop(context);
                             }
                           });
@@ -158,7 +192,7 @@ class _TodoItemState extends State<TodoItem> {
       leading: Checkbox(
         value: widget.todo.completed,
         onChanged: (bool? checked) {
-          context.read<TodoListBloc>().toggleTodo(widget.todo.id);
+          context.read<TodoListBloc>().add(ToggleTodoEvent(id: widget.todo.id));
         },
       ),
       title: Text(widget.todo.desc),
